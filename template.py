@@ -44,7 +44,7 @@ embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # Client untuk Chat (Menggunakan Gemini via library OpenAI)
 ai_client = OpenAI(
-    api_key="AIzaSyB6V3ajvZQyWCTet3txcJ7vpcXHntYv3n4", 
+    api_key="AIzaSyB6V3ajvZQy....", 
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
 
@@ -375,4 +375,5 @@ def get_history():
 # ==========================================
 
 if __name__ == "__main__":
+
     app.run(host="0.0.0.0", port=8000, debug=True)
