@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Document Explorer</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+    <style>
+      /* Gaya tambahan untuk tabel logs */
+      table.log-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 0.9em;
+      }
+      table.log-table th,
+      table.log-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
+      table.log-table th {
+        background-color: #f1f5f9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="nav-bar">
+      <span>Halo, <b id="displayUser">{{username}}</b></span>
+      <a
+        href="/logout"
+        style="color: #dc2626; text-decoration: none; font-weight: bold"
+        >Logout</a
+      >
+    </div>
+
+    <div class="container">
+      <h1>AI Document Explorer</h1>
+
+      <div class="card">
+        <h2>1. Upload PDF</h2>
+        <input type="file" id="pdf" accept=".pdf" />
+        <button onclick="upload()">Proses Dokumen</button>
+        <p id="uploadStatus"></p>
+      </div>
+
+      <div class="card">
+        <h2>2. Pilih Dokumen</h2>
+        <div
+          id="docList"
+          style="
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+          "
+        >
+          <p style="color: gray">Memuat dokumen...</p>
+        </div>
+        <small
+          >Centang dokumen yang ingin ditanya (bisa lebih dari satu).</small
+        >
+      </div>
+
+      <div class="card">
+        <h2>3. Ajukan Pertanyaan</h2>
+        <textarea id="q" rows="3" placeholder="Tulis pertanyaan..."></textarea>
+        <button onclick="ask()">Kirim</button>
+
+        <div
+          id="answerBox"
+          class="hidden"
+          style="
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+          "
+        >
+          <p><b>Jawaban:</b></p>
+          <p id="ans"></p>
+          <button
+            onclick="toggleContext()"
+            style="background: #64748b; margin-top: 10px"
+          >
+            Lihat Konteks
+          </button>
+          <p id="ctx" class="small hidden"></p>
+        </div>
+      </div>
+
+      <div class="card hidden" id="historyBox">
+        <h2>Riwayat Percakapan</h2>
+        <div id="history"></div>
+      </div>
+    </div>
+    <script>
+      const getEl = (id) => document.getElementById(id);
+
+      async function fetchJSON(url, opts) {
+        const res = await fetch(url, opts);
+        if (res.status === 401) window.location.href = "/login";
+        return await res.json();
+      }
+
+      async function loadDocs() {
+        const docs = await fetchJSON("/documents");
+        const box = getEl("docList");
+        box.innerHTML = docs.length
+          ? docs
+              .map(
+                (d) =>
+                  `<div><input type="checkbox" value="${d.id}" name="docs"> <label>${d.filename}</label></div>`,
+              )
+              .join("")
+          : "<p>Kosong</p>";
+      }
+
+      async function upload() {
+        const file = getEl("pdf").files[0];
+        if (!file) return alert("Pilih file!");
+        getEl("uploadStatus").innerText = "Proses...";
+
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetchJSON("/upload", { method: "POST", body: fd });
+
+        getEl("uploadStatus").innerText = res.error
+          ? res.error
+          : `Sukses! ${res.jumlChunks} chunks.`;
+        if (!res.error) loadDocs();
+      }
+
+      async function ask() {
+        const docIds = Array.from(
+          document.querySelectorAll('input[name="docs"]:checked'),
+        ).map((c) => c.value);
+        const q = getEl("q").value;
+        if (!docIds.length || !q)
+          return alert("Pilih dokumen & isi pertanyaan!");
+
+        getEl("ans").innerText = "Berpikir...";
+        getEl("answerBox").classList.remove("hidden");
+        getEl("historyBox").classList.add("hidden");
+
+        const fd = new FormData();
+        fd.append("document_ids", JSON.stringify(docIds));
+        fd.append("question", q);
+
+        const res = await fetchJSON("/ask", { method: "POST", body: fd });
+        getEl("ans").innerText = res.answer || res.error;
+
+        if (res.context) {
+          getEl("ctx").innerHTML = formatContext(res.context);
+        }
+        loadHistory();
+        // loadLogs(); // Hapus baris ini jika Anda tidak memiliki fungsi loadLogs
+      }
+
+      function formatContext(text) {
+        if (!text) return "Tidak ada konteks tersimpan.";
+        return text
+          .replace(/\n/g, "<br>")
+          .replace(
+            /\[Score: ([\d\.]+)\]/g,
+            '<span style="background:#fef08a; font-weight:bold;">$1</span>',
+          );
+      }
+
+      // --- BAGIAN YANG DIUBAH (MENGHILANGKAN TOMBOL KONTEKS) ---
+      async function loadHistory() {
+        const data = await fetchJSON("/history");
+        const box = getEl("history");
+        getEl("historyBox").classList.remove("hidden");
+
+        if (!data.length) {
+          box.innerHTML = "<p style='color:gray'>Belum ada riwayat.</p>";
+          return;
+        }
+
+        box.innerHTML = data
+          .map((item) => {
+            // Kita hapus tombol dan div konteks di sini
+            return `
+            <div class="history-item" style="border-bottom:1px solid #eee; padding: 15px 0;">
+                <small style="color:#64748b">${new Date(item.created_at).toLocaleString()}</small>
+                <div style="margin:5px 0; font-weight:bold; color:#2563eb;">Q: ${item.question}</div>
+                <div style="margin-bottom:10px;">A: ${item.answer}</div>
+            </div>`;
+          })
+          .join("");
+      }
+
+      window.toggleContext = () => getEl("ctx").classList.toggle("hidden");
+
+      window.onload = () => {
+        loadDocs();
+        loadHistory();
+        // loadLogs();
+      };
+    </script>
+  </body>
+</html>

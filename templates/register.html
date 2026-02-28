@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <title>Daftar - AI Explorer</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="card auth-card">
+      <h2>Daftar</h2>
+      <input type="text" id="nama" placeholder="Nama Lengkap" />
+      <input type="email" id="email" placeholder="Email Address" />
+      <input type="text" id="user" placeholder="Username" />
+      <input type="password" id="pass" placeholder="Password" />
+      <button onclick="handleRegister()">Daftar</button>
+      <p class="small">Sudah punya akun? <a href="/login">Login</a></p>
+    </div>
+
+    <script>
+      async function handleRegister() {
+        // Kirim data registrasi ke server
+        const res = await fetch("/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nama: document.getElementById("nama").value,
+            email: document.getElementById("email").value,
+            username: document.getElementById("user").value,
+            password: document.getElementById("pass").value,
+          }),
+        });
+
+        const data = await res.json();
+
+        // Jika sukses, arahkan user untuk login
+        if (res.ok) {
+          alert("Registrasi Berhasil!");
+          window.location.href = "/login";
+        } else alert(data.error);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <title>Login - AI Explorer</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="card auth-card">
+      <h2>Login</h2>
+      <input type="text" id="user" placeholder="Username" />
+      <input type="password" id="pass" placeholder="Password" />
+      <button onclick="handleLogin()">Login</button>
+      <p class="small">Belum punya akun? <a href="/register">Daftar</a></p>
+    </div>
+
+    <script>
+      async function handleLogin() {
+        // Kirim data login ke server
+        const res = await fetch("/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("user").value,
+            password: document.getElementById("pass").value,
+          }),
+        });
+
+        const data = await res.json();
+
+        // Jika sukses (kode 200), pindah ke halaman utama
+        if (res.ok) window.location.href = "/";
+        else alert(data.error);
+      }
+    </script>
+  </body>
+</html>

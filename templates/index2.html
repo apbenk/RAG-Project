@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Document Explorer</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="nav-bar">
+      <span>Halo, <b id="displayUser">{{username}}</b></span>
+      <a
+        href="/logout"
+        style="color: #dc2626; text-decoration: none; font-weight: bold"
+        >Logout</a
+      >
+    </div>
+
+    <div class="container">
+      <h1>AI Document Explorer</h1>
+
+      <div class="card">
+        <h2>1. Upload PDF</h2>
+        <input type="file" id="pdf" accept=".pdf" />
+        <button onclick="upload()">Proses Dokumen</button>
+        <p id="uploadStatus"></p>
+      </div>
+
+      <div class="card">
+        <h2>2. Pilih Dokumen</h2>
+        <div
+          id="docList"
+          style="
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+          "
+        >
+          <p style="color: gray">Memuat dokumen...</p>
+        </div>
+        <small
+          >Centang dokumen yang ingin ditanya (bisa lebih dari satu).</small
+        >
+      </div>
+
+      <div class="card">
+        <h2>3. Ajukan Pertanyaan</h2>
+        <textarea id="q" rows="3" placeholder="Tulis pertanyaan..."></textarea>
+        <button onclick="ask()">Kirim</button>
+
+        <div
+          id="answerBox"
+          class="hidden"
+          style="
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+          "
+        >
+          <p><b>Jawaban:</b></p>
+          <p id="ans"></p>
+          <button
+            onclick="toggleContext()"
+            style="background: #64748b; margin-top: 10px"
+          >
+            Lihat Konteks
+          </button>
+          <p id="ctx" class="small hidden"></p>
+        </div>
+      </div>
+
+      <div class="card hidden" id="historyBox">
+        <h2>Riwayat Percakapan</h2>
+        <div id="history"></div>
+      </div>
+    </div>
+
+    <script>
+      // Fungsi untuk ambil elemen by ID
+      const getEl = (id) => document.getElementById(id);
+
+      // Fungsi bantu untuk request ke backend
+      async function fetchJSON(url, options) {
+        const response = await fetch(url, options);
+        // Jika sesi habis (401), lempar ke login
+        if (response.status === 401) window.location.href = "/login";
+        return await response.json();
+      }
+
+      // Memuat daftar dokumen saat halaman dibuka
+      async function loadDocs() {
+        const docs = await fetchJSON("/documents");
+        const container = getEl("docList");
+        container.innerHTML = ""; // Bersihkan
+
+        if (docs.length === 0) {
+          container.innerHTML = "<p>Belum ada dokumen.</p>";
+          return;
+        }
+
+        docs.forEach((doc) => {
+          // Buat Wrapper Checkbox
+          const div = document.createElement("div");
+          div.style.marginBottom = "5px";
+
+          // Input Checkbox
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = doc.id;
+          checkbox.id = "doc_" + doc.id;
+          checkbox.name = "selected_docs";
+
+          // Label Nama File
+          const label = document.createElement("label");
+          label.htmlFor = "doc_" + doc.id;
+          label.innerText = " " + doc.filename;
+          label.style.cursor = "pointer";
+
+          div.appendChild(checkbox);
+          div.appendChild(label);
+          container.appendChild(div);
+        });
+      }
+      // Logika Upload
+      async function upload() {
+        const file = getEl("pdf").files[0];
+        if (!file) return alert("Pilih file PDF!");
+
+        getEl("uploadStatus").innerText = "Memproses...";
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const result = await fetchJSON("/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        alert(result.message || result.error);
+        const count = result.jumlChunks;
+        const char = result.jmlChar;
+        getEl("uploadStatus").innerText =
+          `Selesai! ${count} chunks berhasil dibuat.\n Total : ${char} Character`;
+        loadDocs();
+      }
+
+      // Logika Bertanya (Ask)
+      async function ask() {
+        // 1. Ambil semua checkbox yang dicentang
+        const checkboxes = document.querySelectorAll(
+          'input[name="selected_docs"]:checked',
+        );
+        const selectedIds = Array.from(checkboxes).map((cb) => cb.value); // Contoh: ["1", "5"]
+
+        const question = getEl("q").value.trim();
+
+        // Validasi
+        if (selectedIds.length === 0)
+          return alert("Pilih minimal satu dokumen!");
+        if (!question) return alert("Tulis pertanyaan!");
+
+        getEl("ans").innerText =
+          "Mencari di " + selectedIds.length + " dokumen...";
+        getEl("answerBox").classList.remove("hidden");
+
+        // Sembunyikan history lama agar tidak bingung
+        getEl("historyBox").classList.add("hidden");
+
+        const formData = new FormData();
+        // Kirim Array ID sebagai JSON string
+        formData.append("document_ids", JSON.stringify(selectedIds));
+        formData.append("question", question);
+
+        const result = await fetchJSON("/ask", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (result.error) {
+          getEl("ans").innerText = "Error: " + result.error;
+        } else {
+          getEl("ans").innerText = result.answer;
+          getEl("ctx").innerHTML = result.context
+            .replace(/\n/g, "<br>")
+            .replace(
+              /\[Jarak: ([\d\.]+)\]/g,
+              '<span style="background:yellow; font-weight:bold; padding:2px;">Jarak: $1</span>',
+            );
+          loadHistory();
+        }
+      }
+
+      // Logika Memuat Riwayat
+      async function loadHistory() {
+        // Panggil route baru tanpa ID
+        const historyData = await fetchJSON("/history");
+        const container = getEl("history");
+        const historyBox = getEl("historyBox");
+
+        // Cek apakah data valid dan berbentuk array
+        if (Array.isArray(historyData) && historyData.length > 0) {
+          historyBox.classList.remove("hidden");
+
+          container.innerHTML = historyData
+            .map((item) => {
+              // Format tanggal agar lebih rapi (Opsional)
+              const date = new Date(item.created_at).toLocaleString("id-ID");
+
+              return `
+                <div class="history-item" style="border-bottom:1px solid #eee; padding: 10px 0;">
+                    <small style="color: #64748b; font-size: 0.8em;">${date}</small>
+                    <div style="margin-top:4px;"><b>Q:</b> ${item.question}</div>
+                    <div style="margin-top:4px;"><b>A:</b> ${item.answer}</div>
+                </div>
+            `;
+            })
+            .join("");
+        } else {
+          // Jika tidak ada riwayat, sembunyikan atau tampilkan pesan kosong
+          // historyBox.classList.add("hidden"); // Opsional: sembunyikan total
+          container.innerHTML =
+            "<p style='color:gray; text-align:center'>Belum ada riwayat percakapan.</p>";
+          historyBox.classList.remove("hidden"); // Tetap tampilkan kotaknya meski kosong
+        }
+      }
+
+      // Tampilkan/Sembunyikan konteks
+      function toggleContext() {
+        getEl("ctx").classList.toggle("hidden");
+      }
+
+      // Jalankan saat pertama kali load
+      window.onload = function () {
+        loadDocs();
+        loadHistory(); // Panggil ini agar riwayat langsung muncul
+      };
+    </script>
+  </body>
+</html>
