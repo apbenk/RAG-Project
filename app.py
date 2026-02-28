@@ -17,7 +17,7 @@ DIRS = {k: os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage", k
 for d in DIRS.values(): os.makedirs(d, exist_ok=True)
 
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-ai_client = OpenAI(api_key="AIzaSyB6V3ajvZQyWCTet3txcJ7vpcXHntYv3n4", 
+ai_client = OpenAI(api_key="AIzaSyB6V3...", 
                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
 
 # --- HELPER ---
@@ -214,4 +214,5 @@ def get_logs():
         return jsonify(cur.fetchall())
 
 if __name__ == "__main__":
+
     app.run(host="0.0.0.0", port=8000, debug=True)
