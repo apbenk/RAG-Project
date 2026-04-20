@@ -32,6 +32,3 @@ rag-project/
 ├── requirements.txt
 ├── README.md
 ```
-
-## 👨‍💻 Author
-Your Name
