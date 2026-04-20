@@ -1,0 +1,8 @@
+Flask
+flask-cors
+sentence-transformers
+faiss-cpu
+numpy
+PyMuPDF
+mysql-connector-python
+openai
